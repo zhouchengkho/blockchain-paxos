@@ -2,5 +2,4 @@
 
 
 ### Run:
-``` cd src/main ```
-``` go build && ../../bin/main ```
+``` go build -o bin/main main && ./bin/main ```
