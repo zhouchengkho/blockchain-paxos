@@ -13,7 +13,8 @@ import "encoding/gob"
 import "math/rand"
 import (
 	"time"
-	"container/list"
+	"blockchain"
+	"encoding/json"
 )
 
 // import "bytes"
@@ -52,7 +53,7 @@ type KVPaxos struct {
 	px         *paxos.Paxos
 
 	// Your definitions here.
-	chain 		*list.List
+	chain 		[]string
 	data        map[string]string      // storage
 	cache       map[int]map[int]*entry // cache
 	lastApplied int                    // last applied sequence
@@ -170,7 +171,7 @@ func (kv *KVPaxos) apply(operation Op, seq int) {
 		// apply it
 		if op == "Put" || op == "Append" {
 			// kv.data[key] = val
-			kv.chain.PushBack(val)
+			kv.chain = append(kv.chain, val)
 		}
 	}
 
@@ -207,12 +208,34 @@ func (kv *KVPaxos) getValue(seq int, op Op) (string, Err) {
 			//} else {
 			//	return "", ErrNoKey
 			//}
-			if kv.chain.Len() > 0 {
-				return kv.chain.Back().Value.(string), OK
-			} else {
+			if len(kv.chain) <= 0 {
 				return "", ErrNoKey
 			}
-
+			position := op.Position
+			limit := 1
+			if position < 0 {
+				limit = -position
+				if len(kv.chain) < limit {
+					limit = len(kv.chain)
+				}
+				blocks := make([]blockchain.BlockInfo, limit)
+				for i := 0; i < limit; i++ {
+					index := len(kv.chain) - limit + i
+					blocks[i].BlockData = blockchain.StrToBlock(kv.chain[index])
+					blocks[i].Index = index
+				}
+				res, _ := json.Marshal(blocks)
+				return string(res), OK
+			} else {
+				if position >= len(kv.chain) {
+					return "", ErrNoKey
+				}
+				blocks := make([]blockchain.BlockInfo, 1)
+				blocks[0].BlockData = blockchain.StrToBlock(kv.chain[position])
+				blocks[0].Index = position
+				res, _ := json.Marshal(blocks)
+				return string(res), OK
+			}
 		}
 
 		// add no op to paxos sequence
@@ -277,7 +300,7 @@ func StartServer(servers []string, me int) *KVPaxos {
 	kv.me = me
 
 	// Your initialization code here.
-	kv.chain = list.New()
+	kv.chain = make([]string, 0)
 	kv.data = make(map[string]string)
 	kv.cache = make(map[int]map[int]*entry)
 	kv.lastApplied = -1
